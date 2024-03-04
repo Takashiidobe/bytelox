@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{opcode::OpCode, value::Value};
+use crate::{compiler::Compiler, opcode::OpCode, value::Value};
 
 #[derive(Debug, Clone)]
 pub enum VMError {
@@ -22,20 +22,23 @@ pub struct VM {
     index: usize,
     pub debug: bool,
     stack: Vec<Value>,
+    compiler: Compiler,
 }
 
 impl VM {
-    pub fn init(chunks: Vec<OpCode>) -> Self {
+    pub fn new(source: &str) -> Self {
         Self {
-            chunks,
+            chunks: vec![],
             index: 0,
             debug: false,
             stack: vec![],
+            compiler: Compiler::new(source.to_string()),
         }
     }
 
     pub fn interpret(&mut self) -> Result<(), VMError> {
-        self.run()
+        self.compiler.compile();
+        Ok(())
     }
 
     fn run(&mut self) -> Result<(), VMError> {

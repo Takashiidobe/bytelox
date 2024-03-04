@@ -1,17 +1,9 @@
-use bytelox::{opcode::OpCode, vm::VM};
+use bytelox::{interpreter::Interpreter, opcode::OpCode, vm::VM};
+use std::env;
 
 fn main() {
-    let instructions = vec![
-        OpCode::from(1.2),
-        OpCode::from(3.4),
-        OpCode::Add,
-        OpCode::from(5.6),
-        OpCode::Divide,
-        OpCode::Negate,
-        OpCode::Return,
-    ];
-    let mut vm = VM::init(instructions.clone());
-    vm.debug = true;
+    let mut vm = VM::interpret(&mut self, "1 + 2");
+    let mut interpreter = Interpreter::new(vm, env::args().collect());
 
-    let _ = vm.interpret();
+    interpreter.run();
 }
