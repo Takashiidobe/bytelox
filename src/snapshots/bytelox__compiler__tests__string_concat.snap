@@ -1,0 +1,20 @@
+---
+source: src/compiler.rs
+expression: tokens
+---
+- Constant:
+    Obj:
+      String: hello
+- Constant:
+    Obj:
+      String: world
+- Add
+- Constant:
+    Obj:
+      String: from
+- Add
+- Constant:
+    Obj:
+      String: rust
+- Add
+- Return

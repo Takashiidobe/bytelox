@@ -1,0 +1,26 @@
+---
+source: src/scanner.rs
+expression: tokens
+---
+- value:
+    String: hello
+  type: String
+  start: 0
+  length: 7
+  line: 1
+- value: ~
+  type: Plus
+  start: 9
+  length: 1
+  line: 1
+- value:
+    String: world
+  type: String
+  start: 10
+  length: 7
+  line: 1
+- value: ~
+  type: Eof
+  start: 17
+  length: 1
+  line: 1

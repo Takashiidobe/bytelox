@@ -3,18 +3,40 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub enum Obj {
+    String(String),
+}
+
+impl Obj {
+    fn is_obj_type(&self, value: Value) -> bool {
+        match self {
+            Obj::String(obj_str) => match value {
+                Value::Obj(value_str) => value_str.to_string() == *obj_str,
+                _ => false,
+            },
+        }
+    }
+}
+
+impl fmt::Display for Obj {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Obj::String(str) => f.write_fmt(format_args!("{}", str)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum Value {
     Number(f64),
     Bool(bool),
     Nil,
+    Obj(Obj),
 }
 
 impl Value {
     pub fn is_falsey(&self) -> bool {
-        match self {
-            Value::Bool(false) | Value::Nil => true,
-            _ => false,
-        }
+        matches!(self, Value::Bool(false) | Value::Nil)
     }
 }
 
@@ -30,6 +52,7 @@ impl fmt::Display for Value {
             Value::Number(num) => f.write_fmt(format_args!("{}", num)),
             Value::Bool(bool) => f.write_fmt(format_args!("{}", bool)),
             Value::Nil => f.write_str("nil"),
+            Value::Obj(obj_type) => f.write_fmt(format_args!("{}", obj_type)),
         }
     }
 }

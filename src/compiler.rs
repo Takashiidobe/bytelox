@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use crate::{
     opcode::OpCode,
     scanner::{Scanner, Token, TokenType, TokenValue},
-    value::Value,
+    value::{Obj, Value},
     vm::VMError,
 };
 
@@ -108,6 +108,7 @@ pub enum PrefixRule {
     Unary,
     Number,
     Literal,
+    String,
 }
 
 #[non_exhaustive]
@@ -246,6 +247,13 @@ lazy_static! {
             ParseRule {
                 infix: InfixRule::Binary,
                 precedence: Precedence::Comparison,
+                ..Default::default()
+            },
+        ),
+        (
+            TokenType::String,
+            ParseRule {
+                prefix: PrefixRule::String,
                 ..Default::default()
             },
         ),
@@ -405,6 +413,17 @@ impl Parser {
         }
     }
 
+    fn string(&mut self) {
+        if let Some(ref x) = self.previous {
+            if TokenType::String == x.r#type {
+                let value = x.value.as_ref().unwrap();
+                if let TokenValue::String(s) = value {
+                    self.emit_constant(Value::Obj(Obj::String(s.to_string())))
+                }
+            }
+        }
+    }
+
     fn expression(&mut self) {
         self.parse_precedence(Precedence::Assignment);
     }
@@ -418,6 +437,7 @@ impl Parser {
             PrefixRule::Unary => self.unary(),
             PrefixRule::Number => self.number(),
             PrefixRule::Literal => self.literal(),
+            PrefixRule::String => self.string(),
             PrefixRule::None => self.error("Expected expression"),
         }
 
@@ -436,8 +456,8 @@ mod tests {
     use super::*;
 
     fn test_compiler(source: &str) -> Result<Vec<OpCode>, VMError> {
-        let mut compiler = Compiler::new(source.to_string());
-        compiler.compile()
+        let mut compiler = Compiler::new();
+        compiler.compile(source)
     }
 
     macro_rules! test_compiler {
@@ -465,4 +485,5 @@ mod tests {
     test_compiler!(ee_false, "10 == 20");
     test_compiler!(ne_true, "10 != 10");
     test_compiler!(ne_false, "10 != 20");
+    test_compiler!(string_concat, "\"hello\" + \"world\" + \"from\" + \"rust\"");
 }

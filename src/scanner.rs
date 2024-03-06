@@ -456,7 +456,8 @@ mod tests {
     use super::*;
 
     fn test_scanner(source: &str) -> Vec<Token> {
-        let mut scanner = Scanner::new(source.to_string());
+        let mut scanner = Scanner::new();
+        scanner.input(source);
         scanner.scan_tokens()
     }
 
@@ -478,4 +479,5 @@ mod tests {
     test_scanner!(relational, "10 <= 20");
     test_scanner!(keywords, "for while print return or nil");
     test_scanner!(multiline, "10\n20\n30");
+    test_scanner!(string_concat, "\"hello\" + \"world\"");
 }

@@ -1,6 +1,10 @@
 use std::fmt;
 
-use crate::{compiler::Compiler, opcode::OpCode, value::Value};
+use crate::{
+    compiler::Compiler,
+    opcode::OpCode,
+    value::{Obj, Value},
+};
 
 #[derive(Debug, Clone)]
 pub enum VMError {
@@ -106,7 +110,12 @@ impl VM {
                 OpCode::Divide => a / b,
                 _ => unreachable!(),
             })),
-            _ => self.runtime_error("Operands must be numbers."),
+            (Value::Obj(Obj::String(a)), Value::Obj(Obj::String(b))) => {
+                let mut new_str = a;
+                new_str.push_str(&b);
+                self.stack.push(Value::Obj(Obj::String(new_str)));
+            }
+            _ => self.runtime_error("Operands must be two numbers or two strings."),
         }
     }
 }
