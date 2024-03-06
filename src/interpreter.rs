@@ -1,5 +1,4 @@
-// repl, runfile
-
+/*
 use std::{fs::read_to_string, io, process};
 
 use crate::vm::{VMError, VM};
@@ -53,3 +52,4 @@ impl Interpreter {
         }
     }
 }
+*/

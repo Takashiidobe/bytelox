@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -35,146 +36,137 @@ impl Scanner {
         }
     }
 
-    pub fn scan_token(&mut self) -> Token {
+    pub fn scan_tokens(&mut self) -> Vec<Token> {
+        let mut tokens = vec![];
+        loop {
+            let curr = self.scan_token();
+            let curr_type = curr.r#type.clone();
+            tokens.push(curr);
+            if curr_type == TokenType::Eof {
+                break;
+            }
+        }
+
+        tokens
+    }
+
+    fn scan_token(&mut self) -> Token {
+        self.skip_whitespace();
         if self.is_at_end() {
-            return Token::Eof {
+            return Token {
+                value: None,
+                r#type: TokenType::Eof,
+                length: 1,
                 start: self.current,
                 line: self.line,
             };
         }
         let c = self.advance();
         match c {
-            '(' => Token::LeftParen {
-                start: self.current,
-                line: self.line,
-            },
-            ')' => Token::RightParen {
-                start: self.current,
-                line: self.line,
-            },
-            '{' => Token::LeftBrace {
-                start: self.current,
-                line: self.line,
-            },
-            '}' => Token::RightBrace {
-                start: self.current,
-                line: self.line,
-            },
-            ';' => Token::Semicolon {
-                start: self.current,
-                line: self.line,
-            },
-            '.' => Token::Dot {
-                start: self.current,
-                line: self.line,
-            },
-            ',' => Token::Comma {
-                start: self.current,
-                line: self.line,
-            },
-            '-' => Token::Minus {
-                start: self.current,
-                line: self.line,
-            },
-            '+' => Token::Plus {
+            '(' | ')' | '{' | '}' | ';' | '.' | ',' | '-' | '+' | '*' => Token {
+                value: None,
+                r#type: TokenType::from(c),
+                length: 1,
                 start: self.current,
                 line: self.line,
             },
             '/' => {
                 if self.peek_next() == '/' {
+                    let mut length = 1;
                     while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
+                        length += 1;
                     }
-                    Token::Comment {
+                    Token {
+                        value: None,
+                        r#type: TokenType::Comment,
                         start: self.current,
                         line: self.line,
+                        length,
                     }
                 } else {
-                    Token::Slash {
+                    Token {
+                        value: None,
+                        r#type: TokenType::Slash,
+                        length: 1,
                         start: self.current,
                         line: self.line,
                     }
                 }
             }
-            '*' => Token::Star {
-                start: self.current,
-                line: self.line,
-            },
-            '!' => {
-                if self.r#match('=') {
-                    Token::BangEqual {
-                        start: self.current,
-                        line: self.line,
-                    }
-                } else {
-                    Token::Bang {
-                        start: self.current,
-                        line: self.line,
-                    }
-                }
-            }
-            '<' => {
-                if self.r#match('=') {
-                    Token::LessEqual {
-                        start: self.current,
-                        line: self.line,
-                    }
-                } else {
-                    Token::Less {
-                        start: self.current,
-                        line: self.line,
-                    }
-                }
-            }
-            '>' => {
-                if self.r#match('=') {
-                    Token::GreaterEqual {
-                        start: self.current,
-                        line: self.line,
-                    }
-                } else {
-                    Token::Greater {
-                        start: self.current,
-                        line: self.line,
-                    }
-                }
-            }
-            '=' => {
-                if self.r#match('=') {
-                    Token::EqualEqual {
-                        start: self.current,
-                        line: self.line,
-                    }
-                } else {
-                    Token::Equal {
-                        start: self.current,
-                        line: self.line,
-                    }
-                }
-            }
+            '!' | '=' | '<' | '>' => self.relational(c),
             '"' => self.string(),
             '0'..='9' => self.number(),
             'a'..='z' | 'A'..='Z' | '_' => self.identifier(c),
-            _ => Token::Error {
-                message: format!("Unknown Token {}", c),
+            _ => Token {
+                value: Some(TokenValue::Error(format!("Unknown Token {}", c))),
+                r#type: TokenType::Error,
                 start: self.current,
+                length: 1,
                 line: self.line,
             },
         }
     }
 
+    fn relational(&mut self, c: char) -> Token {
+        let rel_eq = format!("{}=", c);
+
+        if self.r#match('=') {
+            Token {
+                value: None,
+                r#type: TokenType::from(rel_eq.as_str()),
+                length: 2,
+                start: self.current,
+                line: self.line,
+            }
+        } else {
+            Token {
+                value: None,
+                r#type: TokenType::from(c),
+                length: 1,
+                start: self.current,
+                line: self.line,
+            }
+        }
+    }
+
     fn identifier(&mut self, c: char) -> Token {
         let potential_matches = self.identifiers.entry(c).or_default().clone();
+        let start = self.current.saturating_sub(1);
         for keyword in potential_matches {
             if self.check_keyword(&keyword) {
-                return Token::Identifier {
-                    value: keyword.to_string(),
-                    start: self.current,
+                self.current += keyword.len();
+                return Token {
+                    value: None,
+                    r#type: TokenType::from(keyword.as_str()),
+                    length: keyword.len(),
+                    start,
                     line: self.line,
                 };
             }
         }
-        unreachable!()
+
+        let mut identifier = String::new();
+        identifier.push(self.prev());
+
+        loop {
+            let c = self.advance();
+            if c.is_ascii_alphanumeric() {
+                identifier.push(c);
+            } else {
+                break;
+            }
+        }
+
+        let length = identifier.len();
+
+        Token {
+            value: Some(TokenValue::Identifier(identifier)),
+            r#type: TokenType::Identifier,
+            length,
+            start,
+            line: self.line,
+        }
     }
 
     fn check_keyword(&self, keyword: &str) -> bool {
@@ -182,7 +174,7 @@ impl Scanner {
             return false;
         }
 
-        let mut temp_index = self.current;
+        let mut temp_index = self.current.saturating_sub(1);
 
         for c in keyword.chars() {
             if self.source[temp_index] != c {
@@ -196,6 +188,9 @@ impl Scanner {
 
     fn number(&mut self) -> Token {
         let mut value = String::new();
+        let start = self.current.saturating_sub(1);
+
+        value.push(self.prev());
 
         while self.peek().is_ascii_digit() {
             value.push(self.advance());
@@ -210,15 +205,22 @@ impl Scanner {
             }
         }
 
-        Token::Number {
-            value: value.parse().unwrap(),
-            start: self.current,
+        let length = value.len();
+        let token_type = TokenType::Number;
+
+        Token {
+            value: Some(TokenValue::Number(value.parse::<f64>().unwrap())),
+            r#type: token_type,
+            length,
+            start,
             line: self.line,
         }
     }
 
     fn string(&mut self) -> Token {
         let mut value = String::new();
+        let start = self.current - 1;
+
         while self.peek() != '"' && !self.is_at_end() {
             if self.peek() == '\n' {
                 self.line += 1;
@@ -227,18 +229,26 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            return Token::Error {
-                message: "Unterminated String".to_string(),
-                start: self.current,
+            let error = "Unterminated string".to_string();
+            let length = error.len();
+            return Token {
+                value: Some(TokenValue::Error(error)),
+                r#type: TokenType::Error,
+                start,
+                length,
                 line: self.line,
             };
         }
 
         self.advance();
 
-        Token::String {
-            value,
-            start: self.current,
+        let length = value.len() + 2;
+
+        Token {
+            value: Some(TokenValue::String(value)),
+            r#type: TokenType::String,
+            start,
+            length,
             line: self.line,
         }
     }
@@ -258,11 +268,17 @@ impl Scanner {
     }
 
     fn skip_whitespace(&mut self) {
-        let c = self.peek();
-        while c == ' ' || c == '\r' || c == '\t' || c == '\n' {
-            self.advance();
-            if c == '\n' {
-                self.line += 1;
+        loop {
+            let c = self.peek();
+            match c {
+                ' ' | '\r' | '\t' => {
+                    self.advance();
+                }
+                '\n' => {
+                    self.advance();
+                    self.line += 1;
+                }
+                _ => break,
             }
         }
     }
@@ -279,8 +295,20 @@ impl Scanner {
         }
     }
 
+    fn prev(&self) -> char {
+        if self.current == 0 {
+            '\0'
+        } else {
+            self.source[self.current - 1]
+        }
+    }
+
     fn peek(&self) -> char {
-        self.source[self.current]
+        if self.current < self.source.len() {
+            self.source[self.current]
+        } else {
+            '\0'
+        }
     }
 
     fn advance(&mut self) -> char {
@@ -290,178 +318,178 @@ impl Scanner {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum Token {
-    // Single Character Tokens
-    LeftParen {
-        start: usize,
-        line: usize,
-    },
-    RightParen {
-        start: usize,
-        line: usize,
-    },
-    LeftBrace {
-        start: usize,
-        line: usize,
-    },
-    RightBrace {
-        start: usize,
-        line: usize,
-    },
-    Comma {
-        start: usize,
-        line: usize,
-    },
-    Dot {
-        start: usize,
-        line: usize,
-    },
-    Minus {
-        start: usize,
-        line: usize,
-    },
-    Plus {
-        start: usize,
-        line: usize,
-    },
-    Semicolon {
-        start: usize,
-        line: usize,
-    },
-    Slash {
-        start: usize,
-        line: usize,
-    },
-    Star {
-        start: usize,
-        line: usize,
-    },
-    // One or two character tokens
-    Bang {
-        start: usize,
-        line: usize,
-    },
-    BangEqual {
-        start: usize,
-        line: usize,
-    },
-    Equal {
-        start: usize,
-        line: usize,
-    },
-    EqualEqual {
-        start: usize,
-        line: usize,
-    },
-    Greater {
-        start: usize,
-        line: usize,
-    },
-    GreaterEqual {
-        start: usize,
-        line: usize,
-    },
-    Less {
-        start: usize,
-        line: usize,
-    },
-    LessEqual {
-        start: usize,
-        line: usize,
-    },
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
+pub enum TokenType {
+    // One character
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    Dot,
+    Minus,
+    Plus,
+    Semicolon,
+    Slash,
+    Star,
+    // One or two characters
+    Bang,
+    BangEqual,
+    Equal,
+    EqualEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
     // Literals
-    Identifier {
-        value: String,
-        start: usize,
-        line: usize,
-    },
-    String {
-        value: String,
-        start: usize,
-        line: usize,
-    },
-    Number {
-        value: f64,
-        start: usize,
-        line: usize,
-    },
+    Identifier,
+    String,
+    Number,
     // Keywords
-    And {
-        start: usize,
-        line: usize,
-    },
-    Class {
-        start: usize,
-        line: usize,
-    },
-    Else {
-        start: usize,
-        line: usize,
-    },
-    False {
-        start: usize,
-        line: usize,
-    },
-    For {
-        start: usize,
-        line: usize,
-    },
-    Fun {
-        start: usize,
-        line: usize,
-    },
-    If {
-        start: usize,
-        line: usize,
-    },
-    Nil {
-        start: usize,
-        line: usize,
-    },
-    Or {
-        start: usize,
-        line: usize,
-    },
-    Print {
-        start: usize,
-        line: usize,
-    },
-    Return {
-        start: usize,
-        line: usize,
-    },
-    Super {
-        start: usize,
-        line: usize,
-    },
-    This {
-        start: usize,
-        line: usize,
-    },
-    True {
-        start: usize,
-        line: usize,
-    },
-    Var {
-        start: usize,
-        line: usize,
-    },
-    While {
-        start: usize,
-        line: usize,
-    },
-    Error {
-        message: String,
-        start: usize,
-        line: usize,
-    },
-    Eof {
-        start: usize,
-        line: usize,
-    },
-    Comment {
-        start: usize,
-        line: usize,
-    },
+    And,
+    Class,
+    Else,
+    False,
+    For,
+    Fun,
+    If,
+    Nil,
+    Or,
+    Print,
+    Return,
+    Super,
+    This,
+    True,
+    Var,
+    While,
+    Error,
+    Comment,
+    #[default]
+    Eof,
+}
+
+impl From<char> for TokenType {
+    fn from(value: char) -> Self {
+        match value {
+            '(' => TokenType::LeftParen,
+            ')' => TokenType::RightParen,
+            '{' => TokenType::LeftBrace,
+            '}' => TokenType::RightBrace,
+            ',' => TokenType::Comma,
+            '.' => TokenType::Dot,
+            '-' => TokenType::Minus,
+            '+' => TokenType::Plus,
+            ';' => TokenType::Semicolon,
+            '/' => TokenType::Slash,
+            '*' => TokenType::Star,
+            '!' => TokenType::Bang,
+            '=' => TokenType::Equal,
+            '>' => TokenType::Greater,
+            '<' => TokenType::Less,
+            _ => panic!("Cannot parse from char: {}", value),
+        }
+    }
+}
+
+impl From<&str> for TokenType {
+    fn from(value: &str) -> Self {
+        match value {
+            "(" => TokenType::LeftParen,
+            ")" => TokenType::RightParen,
+            "{" => TokenType::LeftBrace,
+            "}" => TokenType::RightBrace,
+            "," => TokenType::Comma,
+            "." => TokenType::Dot,
+            "-" => TokenType::Minus,
+            "+" => TokenType::Plus,
+            ";" => TokenType::Semicolon,
+            "/" => TokenType::Slash,
+            "*" => TokenType::Star,
+            "!" => TokenType::Bang,
+            "!=" => TokenType::BangEqual,
+            "=" => TokenType::Equal,
+            "==" => TokenType::EqualEqual,
+            ">" => TokenType::Greater,
+            ">=" => TokenType::GreaterEqual,
+            "<" => TokenType::Less,
+            "<=" => TokenType::LessEqual,
+            "and" => TokenType::And,
+            "class" => TokenType::Class,
+            "else" => TokenType::Else,
+            "false" => TokenType::False,
+            "for" => TokenType::For,
+            "fun" => TokenType::Fun,
+            "if" => TokenType::If,
+            "nil" => TokenType::Nil,
+            "or" => TokenType::Or,
+            "print" => TokenType::Print,
+            "return" => TokenType::Return,
+            "super" => TokenType::Super,
+            "this" => TokenType::This,
+            "true" => TokenType::True,
+            "var" => TokenType::Var,
+            "while" => TokenType::While,
+            _ => panic!("Couldn't parse from str: {}", value),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub enum TokenValue {
+    Identifier(String),
+    String(String),
+    Error(String),
+    Number(f64),
+}
+
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct Token {
+    pub value: Option<TokenValue>,
+    pub r#type: TokenType,
+    pub start: usize,
+    pub length: usize,
+    pub line: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_scanner(source: &str) -> Vec<Token> {
+        let mut scanner = Scanner::new(source.to_string());
+        scanner.scan_tokens()
+    }
+
+    #[test]
+    fn add_numbers() {
+        let source = "10.23    + 20.6";
+        let tokens = test_scanner(source);
+        // should be 10, +, 20
+
+        insta::assert_yaml_snapshot!(tokens);
+    }
+
+    #[test]
+    fn var_decl() {
+        let source = "var x = 10;";
+        let tokens = test_scanner(source);
+
+        insta::assert_yaml_snapshot!(tokens);
+    }
+
+    #[test]
+    fn string() {
+        let source = "\"hello\"";
+        let tokens = test_scanner(source);
+
+        insta::assert_yaml_snapshot!(tokens);
+    }
+
+    #[test]
+    fn relational() {
+        let source = "10 <= 20";
+        let tokens = test_scanner(source);
+
+        insta::assert_yaml_snapshot!(tokens);
+    }
 }

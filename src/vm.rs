@@ -1,4 +1,6 @@
+/*
 use std::fmt;
+
 
 use crate::{compiler::Compiler, opcode::OpCode, value::Value};
 
@@ -37,8 +39,12 @@ impl VM {
     }
 
     pub fn interpret(&mut self) -> Result<(), VMError> {
-        self.compiler.compile();
-        Ok(())
+        let chunks = self.compiler.compile();
+        if let Ok(parsed_chunks) = chunks {
+            self.chunks = parsed_chunks;
+        }
+
+        self.run()
     }
 
     fn run(&mut self) -> Result<(), VMError> {
@@ -83,3 +89,4 @@ impl VM {
         }
     }
 }
+*/
