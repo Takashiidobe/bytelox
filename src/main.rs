@@ -1,12 +1,9 @@
-/*
-use bytelox::{interpreter::Interpreter, opcode::OpCode, vm::VM};
+use bytelox::interpreter::Interpreter;
 use std::env;
-*/
 
 fn main() {
-    /*
-    let mut interpreter = Interpreter::new();
+    let args = env::args().collect();
+    let mut interpreter = Interpreter::new(args);
 
     interpreter.run();
-    */
 }

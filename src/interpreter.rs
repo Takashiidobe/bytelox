@@ -4,12 +4,11 @@ use crate::vm::{VMError, VM};
 
 pub struct Interpreter {
     args: Vec<String>,
-    vm: VM,
 }
 
 impl Interpreter {
-    pub fn new(vm: VM, args: Vec<String>) -> Self {
-        Self { vm, args }
+    pub fn new(args: Vec<String>) -> Self {
+        Self { args }
     }
 
     pub fn run(&mut self) {
@@ -25,29 +24,23 @@ impl Interpreter {
 
     fn repl(&mut self) {
         let mut line = String::new();
+        let mut vm = VM::new();
 
         loop {
             print!("> ");
 
-            match io::stdin().read_line(&mut line) {
-                Ok(_) => println!(),
-                Err(e) => {
-                    eprintln!("{}", e);
-                    break;
-                }
+            if let Err(e) = io::stdin().read_line(&mut line) {
+                eprintln!("{}", e);
+                break;
             }
 
-            let _ = self.vm.interpret();
+            let _ = vm.interpret(&line);
         }
     }
 
     fn run_file(&mut self, path: String) -> Result<(), VMError> {
         let source = read_to_string(path).unwrap();
-        let interpret_result = self.vm.interpret();
-
-        match interpret_result {
-            Ok(_) => todo!(),
-            Err(_) => todo!(),
-        }
+        let mut vm = VM::new();
+        vm.interpret(&source)
     }
 }

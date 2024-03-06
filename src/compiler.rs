@@ -15,12 +15,12 @@ pub struct Compiler {
 }
 
 impl Compiler {
-    pub fn new(source: String) -> Self {
-        let parser = Parser::new(source.chars().collect());
-        Self { parser }
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    pub fn compile(&mut self) -> Result<Vec<OpCode>, VMError> {
+    pub fn compile(&mut self, source: &str) -> Result<Vec<OpCode>, VMError> {
+        self.parser.scanner.input(source);
         self.parser.advance();
         self.parser.expression();
         self.parser
@@ -107,6 +107,7 @@ pub enum PrefixRule {
     Grouping,
     Unary,
     Number,
+    Literal,
 }
 
 #[non_exhaustive]
@@ -172,6 +173,82 @@ lazy_static! {
                 ..Default::default()
             },
         ),
+        (
+            TokenType::False,
+            ParseRule {
+                prefix: PrefixRule::Literal,
+                ..Default::default()
+            },
+        ),
+        (
+            TokenType::True,
+            ParseRule {
+                prefix: PrefixRule::Literal,
+                ..Default::default()
+            },
+        ),
+        (
+            TokenType::Nil,
+            ParseRule {
+                prefix: PrefixRule::Literal,
+                ..Default::default()
+            },
+        ),
+        (
+            TokenType::Bang,
+            ParseRule {
+                prefix: PrefixRule::Unary,
+                ..Default::default()
+            },
+        ),
+        (
+            TokenType::BangEqual,
+            ParseRule {
+                infix: InfixRule::Binary,
+                precedence: Precedence::Equality,
+                ..Default::default()
+            },
+        ),
+        (
+            TokenType::EqualEqual,
+            ParseRule {
+                infix: InfixRule::Binary,
+                precedence: Precedence::Equality,
+                ..Default::default()
+            },
+        ),
+        (
+            TokenType::Greater,
+            ParseRule {
+                infix: InfixRule::Binary,
+                precedence: Precedence::Comparison,
+                ..Default::default()
+            },
+        ),
+        (
+            TokenType::GreaterEqual,
+            ParseRule {
+                infix: InfixRule::Binary,
+                precedence: Precedence::Comparison,
+                ..Default::default()
+            },
+        ),
+        (
+            TokenType::Less,
+            ParseRule {
+                infix: InfixRule::Binary,
+                precedence: Precedence::Comparison,
+                ..Default::default()
+            },
+        ),
+        (
+            TokenType::LessEqual,
+            ParseRule {
+                infix: InfixRule::Binary,
+                precedence: Precedence::Comparison,
+                ..Default::default()
+            },
+        ),
     ]);
 }
 
@@ -187,14 +264,12 @@ pub struct Parser {
     pub had_error: bool,
     pub panic_mode: bool,
     pub ops: Vec<OpCode>,
+    pub debug: bool,
 }
 
 impl Parser {
-    pub fn new(source: String) -> Self {
-        Self {
-            scanner: Scanner::new(source.chars().collect()),
-            ..Default::default()
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn consume(&mut self, token_type: &TokenType, message: &str) {
@@ -250,7 +325,7 @@ impl Parser {
 
     fn end_compiler(&mut self) {
         self.emit_return();
-        if !self.had_error {
+        if !self.had_error && self.debug {
             dbg!(&self.current);
         }
     }
@@ -263,12 +338,11 @@ impl Parser {
         self.ops.push(opcode);
     }
 
-    /*
-    fn emit_bytes(&mut self, byte1: OpCode, byte2: OpCode) {
-        self.emit_byte(byte1);
-        self.emit_byte(byte2);
+    fn emit_bytes(&mut self, bytes: &[OpCode]) {
+        for byte in bytes {
+            self.emit_byte(byte.clone());
+        }
     }
-    */
 
     fn emit_constant(&mut self, value: Value) {
         self.emit_byte(OpCode::Constant(value));
@@ -292,8 +366,10 @@ impl Parser {
 
         self.parse_precedence(Precedence::Unary);
 
-        if TokenType::Minus == operator_type {
-            self.emit_byte(OpCode::Negate);
+        match operator_type {
+            TokenType::Minus => self.emit_byte(OpCode::Negate),
+            TokenType::Bang => self.emit_byte(OpCode::Not),
+            _ => unreachable!(),
         }
     }
 
@@ -309,6 +385,22 @@ impl Parser {
             TokenType::Minus => self.emit_byte(OpCode::Subtract),
             TokenType::Star => self.emit_byte(OpCode::Multiply),
             TokenType::Slash => self.emit_byte(OpCode::Divide),
+            TokenType::BangEqual => self.emit_bytes(&[OpCode::Equal, OpCode::Not]),
+            TokenType::EqualEqual => self.emit_byte(OpCode::Equal),
+            TokenType::Greater => self.emit_byte(OpCode::Greater),
+            TokenType::GreaterEqual => self.emit_bytes(&[OpCode::Less, OpCode::Not]),
+            TokenType::Less => self.emit_byte(OpCode::Less),
+            TokenType::LessEqual => self.emit_bytes(&[OpCode::Greater, OpCode::Not]),
+            _ => unreachable!(),
+        }
+    }
+
+    fn literal(&mut self) {
+        let operator_type = self.previous.as_ref().unwrap().r#type.clone();
+        match operator_type {
+            TokenType::False => self.emit_byte(OpCode::False),
+            TokenType::Nil => self.emit_byte(OpCode::Nil),
+            TokenType::True => self.emit_byte(OpCode::True),
             _ => unreachable!(),
         }
     }
@@ -325,6 +417,7 @@ impl Parser {
             PrefixRule::Grouping => self.grouping(),
             PrefixRule::Unary => self.unary(),
             PrefixRule::Number => self.number(),
+            PrefixRule::Literal => self.literal(),
             PrefixRule::None => self.error("Expected expression"),
         }
 
@@ -351,8 +444,7 @@ mod tests {
         ($test_name:ident, $source:expr) => {
             #[test]
             fn $test_name() {
-                let source = $source;
-                let tokens = test_compiler(source).unwrap();
+                let tokens = test_compiler($source).unwrap();
 
                 insta::assert_yaml_snapshot!(tokens);
             }
@@ -363,4 +455,14 @@ mod tests {
     test_compiler!(math, "10.23 - 30 * -20");
     test_compiler!(precedence, "10 + 20 * 30");
     test_compiler!(grouping, "(10 + 20) * 30");
+    test_compiler!(gte_false, "10 >= 20");
+    test_compiler!(gte_true, "20 >= 10");
+    test_compiler!(gte_same, "10 >= 10");
+    test_compiler!(lte_false, "20 <= 10");
+    test_compiler!(lte_true, "20 <= 10");
+    test_compiler!(lte_same, "10 <= 10");
+    test_compiler!(ee_true, "10 == 10");
+    test_compiler!(ee_false, "10 == 20");
+    test_compiler!(ne_true, "10 != 10");
+    test_compiler!(ne_false, "10 != 20");
 }

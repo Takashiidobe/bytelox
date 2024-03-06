@@ -1,0 +1,10 @@
+---
+source: src/compiler.rs
+expression: tokens
+---
+- Constant:
+    Number: 10
+- Constant:
+    Number: 20
+- Equal
+- Return

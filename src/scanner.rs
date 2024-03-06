@@ -10,9 +10,9 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn new(source: String) -> Self {
+    pub fn new() -> Self {
         Self {
-            source: source.chars().collect(),
+            source: vec![],
             line: 1,
             current: 0,
             identifiers: HashMap::from([
@@ -34,6 +34,10 @@ impl Scanner {
                 ('w', vec!["while".to_string()]),
             ]),
         }
+    }
+
+    pub fn input(&mut self, source: &str) {
+        self.source = source.chars().collect()
     }
 
     pub fn scan_token(&mut self) -> Token {
