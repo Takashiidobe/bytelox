@@ -1,4 +1,3 @@
-/*
 use std::{fs::read_to_string, io, process};
 
 use crate::vm::{VMError, VM};
@@ -31,20 +30,20 @@ impl Interpreter {
             print!("> ");
 
             match io::stdin().read_line(&mut line) {
-                Ok(_) => println!(""),
+                Ok(_) => println!(),
                 Err(e) => {
                     eprintln!("{}", e);
                     break;
                 }
             }
 
-            self.vm.interpret(&line);
+            let _ = self.vm.interpret();
         }
     }
 
     fn run_file(&mut self, path: String) -> Result<(), VMError> {
         let source = read_to_string(path).unwrap();
-        let interpret_result = self.vm.interpret(&source);
+        let interpret_result = self.vm.interpret();
 
         match interpret_result {
             Ok(_) => todo!(),
@@ -52,4 +51,3 @@ impl Interpreter {
         }
     }
 }
-*/

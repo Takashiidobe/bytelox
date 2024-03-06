@@ -1,0 +1,40 @@
+---
+source: src/scanner.rs
+expression: tokens
+---
+- value: ~
+  type: For
+  start: 0
+  length: 3
+  line: 1
+- value: ~
+  type: While
+  start: 4
+  length: 5
+  line: 1
+- value: ~
+  type: Print
+  start: 10
+  length: 5
+  line: 1
+- value: ~
+  type: Return
+  start: 16
+  length: 6
+  line: 1
+- value: ~
+  type: Or
+  start: 23
+  length: 2
+  line: 1
+- value:
+    Identifier: nil
+  type: Identifier
+  start: 26
+  length: 3
+  line: 1
+- value: ~
+  type: Eof
+  start: 30
+  length: 1
+  line: 1

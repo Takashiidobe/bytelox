@@ -1,7 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use crate::value::Value;
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum OpCode {
     Constant(Value),
     Negate,

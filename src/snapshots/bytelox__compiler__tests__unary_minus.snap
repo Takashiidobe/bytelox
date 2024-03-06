@@ -1,0 +1,8 @@
+---
+source: src/compiler.rs
+expression: tokens
+---
+- Constant:
+    Number: 10.23
+- Negate
+- Return

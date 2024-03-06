@@ -1,6 +1,4 @@
-/*
 use std::fmt;
-
 
 use crate::{compiler::Compiler, opcode::OpCode, value::Value};
 
@@ -13,18 +11,18 @@ pub enum VMError {
 impl fmt::Display for VMError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            VMError::CompileTime => write!(f, "compiler error"),
+            VMError::CompileTime => write!(f, "compile time error"),
             VMError::Runtime => write!(f, "runtime error"),
         }
     }
 }
 
 pub struct VM {
-    chunks: Vec<OpCode>,
-    index: usize,
+    pub chunks: Vec<OpCode>,
+    pub index: usize,
     pub debug: bool,
-    stack: Vec<Value>,
-    compiler: Compiler,
+    pub stack: Vec<Value>,
+    pub compiler: Compiler,
 }
 
 impl VM {
@@ -89,4 +87,3 @@ impl VM {
         }
     }
 }
-*/

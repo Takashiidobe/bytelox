@@ -1,0 +1,27 @@
+---
+source: src/scanner.rs
+expression: tokens
+---
+- value:
+    Number: 10
+  type: Number
+  start: 0
+  length: 2
+  line: 1
+- value:
+    Number: 20
+  type: Number
+  start: 3
+  length: 2
+  line: 2
+- value:
+    Number: 30
+  type: Number
+  start: 6
+  length: 2
+  line: 3
+- value: ~
+  type: Eof
+  start: 8
+  length: 1
+  line: 3

@@ -36,21 +36,7 @@ impl Scanner {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> Vec<Token> {
-        let mut tokens = vec![];
-        loop {
-            let curr = self.scan_token();
-            let curr_type = curr.r#type.clone();
-            tokens.push(curr);
-            if curr_type == TokenType::Eof {
-                break;
-            }
-        }
-
-        tokens
-    }
-
-    fn scan_token(&mut self) -> Token {
+    pub fn scan_token(&mut self) -> Token {
         self.skip_whitespace();
         if self.is_at_end() {
             return Token {
@@ -106,6 +92,20 @@ impl Scanner {
                 line: self.line,
             },
         }
+    }
+
+    fn scan_tokens(&mut self) -> Vec<Token> {
+        let mut tokens = vec![];
+        loop {
+            let curr = self.scan_token();
+            tokens.push(curr.clone());
+            match curr.r#type {
+                TokenType::Error => panic!("Error"),
+                TokenType::Eof => break,
+                _ => {}
+            }
+        }
+        tokens
     }
 
     fn relational(&mut self, c: char) -> Token {
@@ -254,11 +254,7 @@ impl Scanner {
     }
 
     fn r#match(&mut self, expected: char) -> bool {
-        if self.is_at_end() {
-            return false;
-        }
-
-        if self.peek() != expected {
+        if self.is_at_end() || self.peek() != expected {
             return false;
         }
 
@@ -460,36 +456,22 @@ mod tests {
         scanner.scan_tokens()
     }
 
-    #[test]
-    fn add_numbers() {
-        let source = "10.23    + 20.6";
-        let tokens = test_scanner(source);
-        // should be 10, +, 20
+    macro_rules! test_scanner {
+        ($test_name:ident, $source:expr) => {
+            #[test]
+            fn $test_name() {
+                let source = $source;
+                let tokens = test_scanner(source);
 
-        insta::assert_yaml_snapshot!(tokens);
+                insta::assert_yaml_snapshot!(tokens);
+            }
+        };
     }
 
-    #[test]
-    fn var_decl() {
-        let source = "var x = 10;";
-        let tokens = test_scanner(source);
-
-        insta::assert_yaml_snapshot!(tokens);
-    }
-
-    #[test]
-    fn string() {
-        let source = "\"hello\"";
-        let tokens = test_scanner(source);
-
-        insta::assert_yaml_snapshot!(tokens);
-    }
-
-    #[test]
-    fn relational() {
-        let source = "10 <= 20";
-        let tokens = test_scanner(source);
-
-        insta::assert_yaml_snapshot!(tokens);
-    }
+    test_scanner!(add_numbers, "10.23    + 20.6");
+    test_scanner!(var_decl, "var x = 10;");
+    test_scanner!(string, "\"hello\"");
+    test_scanner!(relational, "10 <= 20");
+    test_scanner!(keywords, "for while print return or nil");
+    test_scanner!(multiline, "10\n20\n30");
 }
