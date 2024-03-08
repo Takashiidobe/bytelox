@@ -8,6 +8,7 @@ pub enum OpCode {
     Constant(Value),
     Not,
     Negate,
+    Print,
     Return,
     Nil,
     True,
@@ -19,6 +20,10 @@ pub enum OpCode {
     Subtract,
     Multiply,
     Divide,
+    Pop,
+    DefineGlobal(String),
+    GetGlobal(String),
+    SetGlobal(String),
 }
 
 impl From<f64> for OpCode {
@@ -50,6 +55,11 @@ impl fmt::Display for OpCode {
             OpCode::Equal => f.write_str("OP_EQUAL"),
             OpCode::Greater => f.write_str("OP_GREATER"),
             OpCode::Less => f.write_str("OP_LESS"),
+            OpCode::Print => f.write_str("OP_PRINT"),
+            OpCode::Pop => f.write_str("OP_POP"),
+            OpCode::DefineGlobal(name) => f.write_fmt(format_args!("OP_DEFINE_GLOBAL: {}", name)),
+            OpCode::GetGlobal(name) => f.write_fmt(format_args!("OP_GET_GLOBAL: {}", name)),
+            OpCode::SetGlobal(name) => f.write_fmt(format_args!("OP_SET_GLOBAL: {}", name)),
         }
     }
 }

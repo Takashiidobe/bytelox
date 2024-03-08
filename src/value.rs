@@ -7,17 +7,6 @@ pub enum Obj {
     String(String),
 }
 
-impl Obj {
-    fn is_obj_type(&self, value: Value) -> bool {
-        match self {
-            Obj::String(obj_str) => match value {
-                Value::Obj(value_str) => value_str.to_string() == *obj_str,
-                _ => false,
-            },
-        }
-    }
-}
-
 impl fmt::Display for Obj {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

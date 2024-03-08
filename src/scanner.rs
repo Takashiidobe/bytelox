@@ -1,21 +1,21 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scanner {
     source: Vec<char>,
     current: usize,
     line: usize,
-    identifiers: HashMap<char, Vec<String>>,
+    keywords: HashMap<char, Vec<String>>,
 }
 
-impl Scanner {
-    pub fn new() -> Self {
+impl Default for Scanner {
+    fn default() -> Self {
         Self {
             source: vec![],
             line: 1,
             current: 0,
-            identifiers: HashMap::from([
+            keywords: HashMap::from([
                 ('a', vec!["and".to_string()]),
                 ('c', vec!["class".to_string()]),
                 ('e', vec!["else".to_string()]),
@@ -34,6 +34,12 @@ impl Scanner {
                 ('w', vec!["while".to_string()]),
             ]),
         }
+    }
+}
+
+impl Scanner {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn input(&mut self, source: &str) {
@@ -98,20 +104,6 @@ impl Scanner {
         }
     }
 
-    fn scan_tokens(&mut self) -> Vec<Token> {
-        let mut tokens = vec![];
-        loop {
-            let curr = self.scan_token();
-            tokens.push(curr.clone());
-            match curr.r#type {
-                TokenType::Error => panic!("Error"),
-                TokenType::Eof => break,
-                _ => {}
-            }
-        }
-        tokens
-    }
-
     fn relational(&mut self, c: char) -> Token {
         let rel_eq = format!("{}=", c);
 
@@ -135,7 +127,8 @@ impl Scanner {
     }
 
     fn identifier(&mut self, c: char) -> Token {
-        let potential_matches = self.identifiers.entry(c).or_default().clone();
+        let potential_matches = self.keywords.get(&c).unwrap_or(&vec![]).clone();
+
         let start = self.current.saturating_sub(1);
         for keyword in potential_matches {
             if self.check_keyword(&keyword) {
@@ -192,7 +185,7 @@ impl Scanner {
 
     fn number(&mut self) -> Token {
         let mut value = String::new();
-        let start = self.current.saturating_sub(1);
+        let start = self.current - 1;
 
         value.push(self.prev());
 
@@ -458,7 +451,21 @@ mod tests {
     fn test_scanner(source: &str) -> Vec<Token> {
         let mut scanner = Scanner::new();
         scanner.input(source);
-        scanner.scan_tokens()
+        scan_tokens(scanner)
+    }
+
+    fn scan_tokens(mut scanner: Scanner) -> Vec<Token> {
+        let mut tokens = vec![];
+        loop {
+            let curr = scanner.scan_token();
+            tokens.push(curr.clone());
+            match curr.r#type {
+                TokenType::Error => panic!("Error"),
+                TokenType::Eof => break,
+                _ => {}
+            }
+        }
+        tokens
     }
 
     macro_rules! test_scanner {

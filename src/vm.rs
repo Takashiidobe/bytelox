@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 use crate::{
     compiler::Compiler,
@@ -21,13 +21,14 @@ impl fmt::Display for VMError {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone)]
 pub struct VM {
     pub chunks: Vec<OpCode>,
     pub index: usize,
     pub debug: bool,
     pub stack: Vec<Value>,
     pub compiler: Compiler,
+    pub globals: HashMap<String, Value>,
 }
 
 impl VM {
@@ -37,6 +38,7 @@ impl VM {
 
     pub fn interpret(&mut self, source: &str) -> Result<(), VMError> {
         let chunks = self.compiler.compile(source);
+
         if let Ok(parsed_chunks) = chunks {
             self.chunks = parsed_chunks;
         }
@@ -45,6 +47,7 @@ impl VM {
     }
 
     fn run(&mut self) -> Result<(), VMError> {
+        dbg!(&self);
         while self.index < self.chunks.len() {
             if self.debug {
                 for value in &self.stack {
@@ -53,9 +56,10 @@ impl VM {
                 println!("Instruction: {}", &self.chunks[self.index]);
             }
             let op = &self.chunks[self.index];
+            dbg!(&self.stack);
             match op {
                 OpCode::Constant(value) => self.stack.push(value.clone()),
-                OpCode::Return => println!("{}", self.stack.pop().unwrap()),
+                OpCode::Return => return Ok(()),
                 OpCode::Negate => {
                     let operand = self.stack.pop().unwrap();
                     match operand {
@@ -88,7 +92,36 @@ impl VM {
                     let a = self.stack.pop().unwrap();
                     self.stack.push(Value::Bool(a < b));
                 }
+                OpCode::Print => {
+                    let top = self.stack.pop().unwrap();
+                    println!("{}", top);
+                }
+                OpCode::Pop => {
+                    self.stack.pop();
+                }
+                OpCode::DefineGlobal(name) => {
+                    let top = self.stack.pop().unwrap();
+                    self.globals.insert(name.to_string(), top);
+                }
+                OpCode::GetGlobal(name) => match self.globals.get(name) {
+                    Some(value) => self.stack.push(value.clone()),
+                    None => {
+                        self.runtime_error(&format!("Undefined variable '{}'", name));
+                        return Err(VMError::Runtime);
+                    }
+                },
+                OpCode::SetGlobal(name) => {
+                    if self.globals.contains_key(name) {
+                        let val = self.stack.last().unwrap();
+                        self.globals.insert(name.to_string(), val.clone());
+                    } else {
+                        self.runtime_error(&format!("Undefined variable '{}'", name));
+                        return Err(VMError::Runtime);
+                    }
+                }
             }
+            dbg!(&self.stack);
+            dbg!(&self.globals);
             self.index += 1;
         }
         Ok(())

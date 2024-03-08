@@ -9,7 +9,7 @@ use crate::{
     vm::VMError,
 };
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone)]
 pub struct Compiler {
     parser: Parser,
 }
@@ -22,9 +22,9 @@ impl Compiler {
     pub fn compile(&mut self, source: &str) -> Result<Vec<OpCode>, VMError> {
         self.parser.scanner.input(source);
         self.parser.advance();
-        self.parser.expression();
-        self.parser
-            .consume(&TokenType::Eof, "Expect end of expression.");
+        while !self.parser.r#match(&TokenType::Eof) {
+            self.parser.declaration();
+        }
         self.parser.end_compiler();
 
         if self.parser.had_error {
@@ -109,6 +109,7 @@ pub enum PrefixRule {
     Number,
     Literal,
     String,
+    Variable,
 }
 
 #[non_exhaustive]
@@ -257,6 +258,13 @@ lazy_static! {
                 ..Default::default()
             },
         ),
+        (
+            TokenType::Identifier,
+            ParseRule {
+                prefix: PrefixRule::Variable,
+                ..Default::default()
+            },
+        ),
     ]);
 }
 
@@ -264,7 +272,7 @@ fn get_rule(token_type: &TokenType) -> ParseRule {
     RULES.get(token_type).cloned().unwrap_or_default()
 }
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone)]
 pub struct Parser {
     pub scanner: Scanner,
     pub previous: Option<Token>,
@@ -293,15 +301,13 @@ impl Parser {
     fn advance(&mut self) {
         self.previous = self.current.clone();
 
-        loop {
-            self.current = Some(self.scanner.scan_token());
-            if let Some(current) = &self.current {
-                if current.r#type != TokenType::Error {
-                    break;
-                }
+        self.current = Some(self.scanner.scan_token());
+        if let Some(current) = &self.current {
+            if current.r#type != TokenType::Error {
+                return;
             }
-            self.error("found error token");
         }
+        self.error("found error token");
     }
 
     fn error(&mut self, message: &str) {
@@ -356,11 +362,116 @@ impl Parser {
         self.emit_byte(OpCode::Constant(value));
     }
 
+    fn declaration(&mut self) {
+        if self.r#match(&TokenType::Var) {
+            self.var_declaration();
+        } else {
+            self.statement();
+        }
+
+        if self.panic_mode {
+            dbg!("synchronizing");
+            self.synchronize();
+            dbg!(self.panic_mode);
+        }
+    }
+
+    fn statement(&mut self) {
+        if self.r#match(&TokenType::Print) {
+            self.print_statement();
+        } else {
+            self.expression_statement();
+        }
+    }
+
+    fn expression_statement(&mut self) {
+        self.expression();
+        self.consume(&TokenType::Semicolon, "Expect ';' after expression.");
+        self.emit_byte(OpCode::Pop);
+    }
+
+    fn var_declaration(&mut self) {
+        let global = self.parse_variable("Expect variable name.");
+
+        if self.r#match(&TokenType::Equal) {
+            self.expression();
+        } else {
+            self.emit_byte(OpCode::Nil);
+        }
+
+        self.consume(
+            &TokenType::Semicolon,
+            "Expect ';' after variable declaration.",
+        );
+
+        self.define_variable(&global);
+    }
+
+    fn parse_variable(&mut self, error_message: &str) -> String {
+        self.consume(&TokenType::Identifier, error_message);
+        self.identifier_constant(&self.previous.clone().unwrap())
+    }
+
+    fn identifier_constant(&mut self, token: &Token) -> String {
+        if let TokenValue::Identifier(s) = token.value.as_ref().unwrap() {
+            return s.to_string();
+        }
+        panic!("Not an identifier")
+    }
+
+    fn define_variable(&mut self, name: &str) {
+        self.emit_byte(OpCode::DefineGlobal(name.to_string()));
+    }
+
+    fn r#match(&mut self, token_type: &TokenType) -> bool {
+        if !self.check(token_type) {
+            return false;
+        }
+        self.advance();
+        true
+    }
+
+    fn check(&mut self, token_type: &TokenType) -> bool {
+        self.current.as_ref().unwrap().r#type == *token_type
+    }
+
+    fn print_statement(&mut self) {
+        self.expression();
+        dbg!(&self);
+        self.consume(&TokenType::Semicolon, "Expect ';' after value.");
+        self.emit_byte(OpCode::Print);
+    }
+
     fn number(&mut self) {
-        if let Some(Token { value, .. }) = &self.previous {
-            if let Some(TokenValue::Number(num)) = value {
-                self.emit_constant(Value::from(*num))
+        if let Some(Token {
+            value: Some(TokenValue::Number(num)),
+            ..
+        }) = &self.previous
+        {
+            self.emit_constant(Value::from(*num))
+        }
+    }
+
+    fn synchronize(&mut self) {
+        self.panic_mode = false;
+
+        while self.current.as_ref().unwrap().r#type != TokenType::Eof {
+            if self.previous.as_ref().unwrap().r#type == TokenType::Semicolon {
+                return;
             }
+
+            match self.current.as_ref().unwrap().r#type {
+                TokenType::Class
+                | TokenType::Fun
+                | TokenType::Var
+                | TokenType::For
+                | TokenType::If
+                | TokenType::While
+                | TokenType::Print
+                | TokenType::Return => return,
+                _ => {}
+            }
+            self.advance();
         }
     }
 
@@ -424,6 +535,20 @@ impl Parser {
         }
     }
 
+    fn variable(&mut self, can_assign: bool) {
+        self.named_variable(&self.previous.clone().unwrap(), can_assign);
+    }
+
+    fn named_variable(&mut self, name: &Token, can_assign: bool) {
+        let var_name = self.identifier_constant(name);
+        if can_assign && self.r#match(&TokenType::Equal) {
+            self.expression();
+            self.emit_byte(OpCode::SetGlobal(var_name));
+        } else {
+            self.emit_byte(OpCode::GetGlobal(var_name));
+        }
+    }
+
     fn expression(&mut self) {
         self.parse_precedence(Precedence::Assignment);
     }
@@ -431,6 +556,7 @@ impl Parser {
     fn parse_precedence(&mut self, precedence: Precedence) {
         self.advance();
         let prefix_rule = get_rule(&self.previous.as_ref().unwrap().r#type).prefix;
+        let can_assign = precedence <= Precedence::Assignment;
 
         match prefix_rule {
             PrefixRule::Grouping => self.grouping(),
@@ -439,13 +565,19 @@ impl Parser {
             PrefixRule::Literal => self.literal(),
             PrefixRule::String => self.string(),
             PrefixRule::None => self.error("Expected expression"),
+            PrefixRule::Variable => self.variable(can_assign),
         }
 
         while precedence <= get_rule(&self.current.as_ref().unwrap().r#type).precedence {
             self.advance();
             let infix_rule = get_rule(&self.previous.as_ref().unwrap().r#type).infix;
-            if let InfixRule::Binary = infix_rule {
-                self.binary()
+
+            if can_assign && self.r#match(&TokenType::Equal) {
+                self.error("Invalid assignment target.");
+            }
+            match infix_rule {
+                InfixRule::Binary => self.binary(),
+                InfixRule::None => unreachable!(),
             }
         }
     }
